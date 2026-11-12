@@ -19,7 +19,9 @@ cp ext/bcmath/libbcmath/LICENSE libbcmath_LICENSE
 pushd sapi
 tar -xvf $SOURCE1 --exclude=Makefile.frag --exclude=config.m4
 cp litespeed-${litespeed_version}/* litespeed
-# PHP 8.6 removed WRONG_PARAM_COUNT and zval_dtor(); use the replacements from UPGRADING.INTERNALS
+# TEMPORARY: php-litespeed 8.1 (2022) still uses WRONG_PARAM_COUNT and zval_dtor(), both removed
+# in PHP 8.6 (see UPGRADING.INTERNALS); swap in the documented replacements. Drop this sed+grep
+# once litespeed_version is bumped to an LSAPI release that builds against 8.6 unmodified.
 sed -i -e 's/WRONG_PARAM_COUNT;/zend_wrong_param_count(); RETURN_THROWS();/' -e 's/\bzval_dtor(/zval_ptr_dtor_nogc(/g' litespeed/lsapi_main.c
 if grep -qE 'WRONG_PARAM_COUNT|\bzval_dtor\(' litespeed/lsapi_main.c; then echo "removed PHP APIs still present in litespeed" >&2; exit 1; fi
 popd
