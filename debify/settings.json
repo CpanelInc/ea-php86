@@ -19,6 +19,9 @@
         "scl-utils-build",
         "pkgconfig(libsodium)",
         "libsodium",
+        "libavif",
+        "libavif-bin",
+        "libavif-dev",
         "ea-re2c"
     ],
     "remove_from_provides": [
@@ -51,12 +54,14 @@
         "libbrotli1",
         "libsodium-dev",
         "libsodium23",
+        "libavif-dev",
         "re2c"
     ],
     "add_to_requires": {
         "ea-php86-php-xml": [ ["libxml2-16", "libxml2t64", "libxml2"] ],
         "ea-php86-php-imap": [ "libc-client2007e" ],
         "ea-php86-php-dba": [ "libtokyocabinet9" ],
+        "ea-php86-php-gd" : [ "libavif-bin" ],
         "ea-php86-php-odbc": [ [ "libodbc1", "libodbc2" ] ],
         "ea-php86-php-pdo": [ "libpq5", [ "libodbc1", "libodbc2" ] ],
         "ea-php86-php-pgsql": [ "libpq5" ],

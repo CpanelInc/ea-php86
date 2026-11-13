@@ -136,6 +136,7 @@ else
    export AVIFFLAG="--with-avif"
 fi
 
+# No PIC flag: see the comment above %configure in the spec
 ./configure \
     --disable-gcc-global-regs \
     --build=x86_64-linux-gnu \
@@ -162,7 +163,6 @@ fi
     --with-config-file-scan-dir=/opt/cpanel/ea-php86/root/etc/php.d \
     --disable-debug \
     --with-password-argon2=/opt/cpanel/libargon2 \
-    --enable-pic \
     --without-pear \
     --with-bz2=shared \
     --with-freetype \ \

@@ -193,15 +193,12 @@ BuildRequires: libstdc++-devel
 %if 0%{?rhel} > 7
 # In C8 we use system openssl. See DESIGN.md in ea-openssl11 git repo for details
 BuildRequires: openssl, openssl-devel
-Requires: openssl
 %else
 BuildRequires: ea-openssl11 >= %{ea_openssl_ver}, ea-openssl11-devel >= %{ea_openssl_ver}
-Requires: ea-openssl11 >= %{ea_openssl_ver}
 %endif
 
 # For Argon2 support
 BuildRequires: ea-libargon2-devel
-Requires: ea-libargon2
 BuildRequires: sqlite-devel >= 3.7.5
 BuildRequires: zlib-devel, smtpdaemon
 BuildRequires: libedit-devel
@@ -348,6 +345,14 @@ Provides: %{?scl_prefix}php-pecl(opcache) = %{version}-%{release}
 Provides: %{?scl_prefix}php-pecl(opcache)%{?_isa} = %{version}-%{release}
 %{!?scl:Obsoletes: php-openssl, php-pecl-json, php-json, php-pecl-phar, php-pecl-Fileinfo}
 %{?scl:Requires: %{scl}-runtime}
+# For Argon2 support (password_hash() in ext/standard)
+Requires: ea-libargon2
+# For the built-in openssl extension
+%if 0%{?rhel} > 7
+Requires: openssl
+%else
+Requires: ea-openssl11 >= %{ea_openssl_ver}
+%endif
 
 %description common
 The %{?scl_prefix}php-common package contains files used by both
@@ -752,8 +757,14 @@ BuildRequires: libjpeg-turbo-devel%{?_isa}, libpng-devel%{?_isa}, libXpm-devel%{
 Requires: libwebp%{?_isa}
 BuildRequires: libwebp-devel%{?_isa}
 %if %{with_avif}
+%if 0%{?rhel} == 9
+# EA4-334: version pin avoids the AlmaLinux 9 EPEL libavif conflict (8.6 GD needs >= 1.0 anyway)
+Requires: libavif >= 1.0
+BuildRequires: libavif-devel >= 1.0
+%else
 Requires: libavif%{?_isa}
 BuildRequires: libavif-devel%{?_isa}
+%endif
 %endif
 
 %description gd
@@ -1054,9 +1065,9 @@ cp ../Zend/zend_{language,ini}_{parser,scanner}.* Zend
 # zlib: used by image
 
 %if 0%{?rhel} > 7
-export PKG_CONFIG_PATH=/opt/cpanel/ea-php86/root/usr/%{_lib}/pkgconfig:/opt/cpanel/ea-php86/root/usr/share/pkgconfig:/usr/%{_lib}/pkgconfig:/opt/cpanel/ea-libicu/lib/pkgconfig:/opt/cpanel/ea-oniguruma/%{_lib}/pkgconfig:/opt/cpanel/libargon2/lib64/pkgconfig:/usr/lib64/pkgconfig:/usr/lib64/pkgconfig:/opt/cpanel/libargon2/lib64/pkgconfig
+export PKG_CONFIG_PATH=/opt/cpanel/ea-php86/root/usr/%{_lib}/pkgconfig:/opt/cpanel/ea-php86/root/usr/share/pkgconfig:/opt/cpanel/ea-libicu/lib/pkgconfig:/usr/%{_lib}/pkgconfig:/opt/cpanel/ea-oniguruma/%{_lib}/pkgconfig:/opt/cpanel/libargon2/lib64/pkgconfig:/usr/lib64/pkgconfig:/usr/lib64/pkgconfig:/opt/cpanel/libargon2/lib64/pkgconfig
 %else
-export PKG_CONFIG_PATH=/opt/cpanel/ea-php86/root/usr/%{_lib}/pkgconfig:/opt/cpanel/ea-php86/root/usr/share/pkgconfig:/usr/%{_lib}/pkgconfig:/opt/cpanel/ea-openssl11/lib/pkgconfig:/opt/cpanel/ea-libicu/lib/pkgconfig:/opt/cpanel/ea-oniguruma/%{_lib}/pkgconfig:/opt/cpanel/libargon2/lib64/pkgconfig:/usr/lib64/pkgconfig:/usr/lib64/pkgconfig:/opt/cpanel/libargon2/lib64/pkgconfig
+export PKG_CONFIG_PATH=/opt/cpanel/ea-php86/root/usr/%{_lib}/pkgconfig:/opt/cpanel/ea-php86/root/usr/share/pkgconfig:/opt/cpanel/ea-libicu/lib/pkgconfig:/usr/%{_lib}/pkgconfig:/opt/cpanel/ea-openssl11/lib/pkgconfig:/opt/cpanel/ea-oniguruma/%{_lib}/pkgconfig:/opt/cpanel/libargon2/lib64/pkgconfig:/usr/lib64/pkgconfig:/usr/lib64/pkgconfig:/opt/cpanel/libargon2/lib64/pkgconfig
 %endif
 
 %if !%{use_system_libxml2}
@@ -1104,6 +1115,8 @@ export LDFLAGS="$LDFLAGS -Wl,-rpath,/opt/cpanel/libargon2/lib64 -L/opt/cpanel/li
 export ARGON2_CFLAGS=-I/opt/cpanel/libargon2/include
 
 ln -sf ../configure
+# No PIC flag: PHP 8.6's build/php.m4 rejects --with-pic, and --enable-pic is unknown to the
+# system libtool 2.4.x that replaces build/libtool.m4 above. Shared extensions still get -fPIC.
 %configure \
     --cache-file=../config.cache \
     --with-libdir=%{_lib} \
@@ -1111,7 +1124,6 @@ ln -sf ../configure
     --with-config-file-scan-dir=%{_sysconfdir}/php.d \
     --disable-debug \
     --with-password-argon2=/opt/cpanel/libargon2 \
-    --enable-pic \
     --without-pear \
     --with-bz2 \
     --with-freetype \
@@ -1606,3 +1618,5 @@ fi
 %changelog
 * Tue Nov 10 2026 Julian Brown <julian.brown@webpros.com> - 8.6.0-1
 - EA4-398: First build (8.6.0RC5)
+- EA4-398: Carry over EA4-361 (argon/openssl deps in -common), EA4-326 (link
+  php-intl against ea-libicu on EL9) and EA4-334 (EL9 libavif >= 1.0) from ea-php85
