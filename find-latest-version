@@ -1,41 +1,155 @@
 #!/usr/bin/env perl
-# cpanel - find-latest-version                  Copyright(c) 2026 cPanel, L.L.C.
-#                                                           All rights Reserved.
-# copyright@cpanel.net                                         http://cpanel.net
-# This code is subject to the cPanel license. Unauthorized copying is prohibited
 
-package ea_repo_name_goes_here::find_latest_version;
+#                                      Copyright 2026 WebPros International, LLC
+#                                                           All rights reserved.
+# copyright@cpanel.net                                         http://cpanel.net
+# This code is subject to the cPanel license. Unauthorized copying is prohibited.
+
+package ea_php::find_latest_version;
 
 use strict;
 use warnings;
 
+use HTML::TreeBuilder::XPath ();
+
+use FindBin;
 use lib "../ea-tools/lib/ea4_tool";    # assumes ea-tools is checked out next to this repo
 use ea4_tool::util ();
 
-ea4_tool::util::find_latest_version(\&_get_required, \&_add_sum) if !caller();
+ea4_tool::util::find_latest_version( \&_get_required, \&_add_sum ) if !caller();
 
 ###############
 #### helpers ##
 ###############
 
+# Set by _get_required() when the version came from the pre-release feed,
+# which carries its own checksum (RC tarballs are not on php.net/downloads.php).
+our $prerelease_sha256;
+
+sub _get_php_major {
+    if ( $FindBin::Bin =~ m/(\d)(\d)$/ ) {
+        return "$1.$2";
+    }
+
+    die "Could not determine what version of PHP I am from “$FindBin::Bin”\n";
+}
+
 sub _get_required {
-   my ($http) = @_;
+    my ($http) = @_;
 
-   my ( $version, $url, $name );
+    $prerelease_sha256 = undef;
+    my $php_major = _get_php_major();
 
-   my $res  = $http->get("https://repo.example.org/releases");
-   # get $version, $url, $name from $res (and possibly multiple HTTP calls)
-   # die if there is a problem determining any of those values
+    my @ga = _get_ga_versions( $http, $php_major );
+    if ( @ga && !$ENV{EA4TOOL_INCLUDE_PHPRC_VERSIONS} ) {
+        my ($latest) = sort { $b <=> $a } @ga;
+        $latest++ if $ENV{PHP_TAG_IS_STALE};
 
-   return ( $version, $url, $name );
+        my $version = "$php_major.$latest";
+        my $name    = "php-$version.tar.bz2";
+        my $url     = "http://www.php.net/distributions/$name";
+
+        return ( $version, $url, $name );
+    }
+
+    # No GA release of this major yet (or RCs were explicitly requested):
+    # use php.net’s pre-release feed for the current alpha/beta/RC.
+    return _get_prerelease( $http, $php_major );
+}
+
+# Returns the patch numbers of GA (non-alpha/beta/RC) tags for $php_major.
+sub _get_ga_versions {
+    my ( $http, $php_major ) = @_;
+
+    # PHP tags can be published before the matching GitHub release object, so
+    # look at tags directly. The php.net checksum is still required in
+    # _add_sum() before an update can proceed.
+    my $res = $http->get("https://api.github.com/repos/php/php-src/git/matching-refs/tags/php-$php_major.");
+    if ( !$res->{success} ) {
+        die "Could not GET php tag info from github ($res->{status} $res->{reason})\n\t Throttled? `curl -I https://api.github.com/rate_limit 2>&1 | grep ^X-RateLimit`\n";
+    }
+
+    my @ga;
+    for my $tag ( ea4_tool::util::json2ref( $res->{content} )->@* ) {
+        if ( $tag->{ref} =~ m{^refs/tags/php-\Q$php_major\E\.(\d+)$} ) {
+            push @ga, $1;
+        }
+    }
+
+    return @ga;
+}
+
+sub _get_prerelease {
+    my ( $http, $php_major ) = @_;
+
+    my $res = $http->get("https://www.php.net/pre-release-builds.php?format=json");
+    if ( !$res->{success} ) {
+        die "Could not GET php pre-release info ($res->{status} $res->{reason})\n";
+    }
+
+    my $feed = ea4_tool::util::json2ref( $res->{content} );
+
+    my @candidates;
+    for my $key ( keys %{$feed} ) {
+        next if $key !~ m/^\Q$php_major\E\.(\d+)$/;
+        my $patch = $1;
+        my $rel   = $feed->{$key}{release} // {};
+        next if !$rel->{version} || !$rel->{files}{bz2}{path} || !$rel->{files}{bz2}{sha256};
+        push @candidates, { patch => $patch, rel => $rel };
+    }
+
+    die "No $php_major GA tag and no $php_major pre-release build is available\n" if !@candidates;
+
+    my ($best) = sort { $b->{patch} <=> $a->{patch} } @candidates;
+    my $rel = $best->{rel};
+
+    my $version = $rel->{version};                      # e.g. 8.6.0RC5
+    my $url     = $rel->{files}{bz2}{path};
+    my $name    = ( split m{/}, $url )[-1];             # php-8.6.0RC5.tar.bz2
+    die "Unexpected pre-release tarball name “$name”\n" if $name ne "php-$version.tar.bz2";
+
+    $prerelease_sha256 = $rel->{files}{bz2}{sha256};
+
+    return ( $version, $url, $name );
 }
 
 sub _add_sum {
-    my ($http, $hr) = @_;
+    my ( $http, $hr ) = @_;
 
-    # Optional: Set $hr->{tarball}{sum}{hex} and $hr->{tarball}{sum}{type} (sha256, sha1, md5, anythign Digest.pm can handle)
-    #           die if there is a problem determining either of those values
-    # otherwise this is a no-op
+    if ($prerelease_sha256) {
+        $hr->{tarball}{sum}{hex}  = $prerelease_sha256;
+        $hr->{tarball}{sum}{type} = "sha256";
+        return;
+    }
+
+    my $res = $http->get("https://www.php.net/downloads.php?source=Y");
+    if ( !$res->{success} ) {
+        die "Could not GET php SHA info ($res->{status} $res->{reason})\n";
+    }
+
+    my $sha;
+    my $dom = HTML::TreeBuilder::XPath->new_from_content( $res->{content} );
+  LI:
+    for my $li ( $dom->findnodes("//li") ) {
+        my @links = @{ $li->findnodes("a") };
+        next LI if !@links || $links[0]->attr("href") ne "/distributions/$hr->{tarball}{name}";
+
+        # php.net wraps the checksum in a sha256-row span. Search descendants,
+        # rather than only direct children, so the actual checksum is found.
+        for my $span ( $li->findnodes('.//span[@class="sha256"]') ) {
+            $sha = $span->content();
+            $sha = $sha->[0] if ref($sha) eq 'ARRAY';
+            last LI;
+        }
+    }
+
+    if ($sha) {
+        $hr->{tarball}{sum}{hex}  = $sha;
+        $hr->{tarball}{sum}{type} = "sha256";
+    }
+    else {
+        die "There is no SHA for $hr->{tarball}{name} (not officially released yet?)\n";
+    }
 
     return;
 }
@@ -46,4 +160,13 @@ __END__
 
 =head1 README
 
-… explain nuances of fetching the latest-info for this repo here for future us …
+The PHP major (e.g. 8.6) is taken from the repo directory name.
+
+Once GA tags (C<php-X.Y.N>) exist in php-src, the newest one is used and its
+sha256 comes from php.net/downloads.php, same as the other ea-phpXY repos.
+C<PHP_TAG_IS_STALE> bumps the patch by one for when php.net is ahead of the tag.
+
+Before GA (or when C<EA4TOOL_INCLUDE_PHPRC_VERSIONS> is set) the current
+alpha/beta/RC is taken from L<https://www.php.net/pre-release-builds.php?format=json>.
+That feed gives the release manager’s download URL (downloads.php.net/~rm/) and
+the sha256, because RC tarballs are not listed on php.net/distributions.

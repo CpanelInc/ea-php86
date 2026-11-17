@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Julian Brown <julian.brown@webpros.com>
+Date: Tue, 10 Nov 2026 19:30:00 +0000
+Subject: [PATCH 13/13] Define HAVE_FT2BUILD_H for bundled libgd
+
+Backport of the config.m4 half of php/php-src#23870 (fixes GH-23862).
+Since the libgd 2.4 sync, gdft.c only includes <ft2build.h> when
+HAVE_FT2BUILD_H is defined, but config.m4 never defines it. FreeType
+< 2.10 (e.g. EL8's 2.9.1) refuses <freetype/freetype.h> without it.
+Drop this patch once the upstream fix is in a PHP 8.6 release.
+---
+ ext/gd/config.m4 | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/ext/gd/config.m4 b/ext/gd/config.m4
+--- a/ext/gd/config.m4
++++ b/ext/gd/config.m4
+@@ -181,6 +181,8 @@
+     PHP_EVAL_LIBLINE([$FREETYPE2_LIBS], [GD_SHARED_LIBADD])
+     AC_DEFINE([HAVE_LIBFREETYPE], [1],
+       [Define to 1 if you have the FreeType library.])
++    AC_DEFINE([HAVE_FT2BUILD_H], [1],
++      [Define to 1 if you have the <ft2build.h> header file.])
+     AC_DEFINE([HAVE_GD_FREETYPE], [1],
+       [Define to 1 if gd extension has FreeType support.])
+   ])
