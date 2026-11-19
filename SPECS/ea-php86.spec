@@ -17,8 +17,8 @@
 %scl_package php
 
 # API/ABI check
-%global apiver      20260924
-%global zendver     20260924
+%global apiver      20261112
+%global zendver     20261112
 %global pdover      20240423
 
 # Adds -z now to the linker flags
@@ -117,7 +117,7 @@ Vendor:   cPanel, Inc.
 Name:     %{?scl_prefix}php
 Version:  8.6.0
 # Doing release_prefix this way for Release allows for OBS-proof versioning, See EA-4588 for more details
-%define release_prefix 1
+%define release_prefix 2
 Release:  %{release_prefix}%{?dist}.cpanel
 # All files licensed under PHP version 3.01, except
 # Zend is licensed under Zend
@@ -128,9 +128,7 @@ URL:      http://www.php.net/
 
 %global litespeed_version 8.1
 
-# Change after RC Versions: deb versions cannot carry "RC", so Version stays X.Y.Z
-# and only the tarball name has the RC suffix.
-Source0: php-%{version}RC5.tar.bz2
+Source0: php-%{version}.tar.bz2
 Source1: https://www.litespeedtech.com/packages/lsapi/php-litespeed-%{litespeed_version}.tgz
 Source2: php.ini
 Source3: macros.php
@@ -880,9 +878,7 @@ inside them.
 %prep
 : Building %{name}-%{version}-%{release} with systemd=%{with_systemd} sqlite3=%{with_sqlite3} tidy=%{with_tidy} zip=%{with_zip}
 
-# Change after RC Versions
-# %setup -q -n php-%{version}
-%setup -q -n php-%{version}RC5
+%setup -q -n php-%{version}
 
 %patch42 -p1 -b .systemdpackage
 %patch43 -p1 -b .phpize
@@ -1616,6 +1612,9 @@ fi
 %files zip -f files.zip
 
 %changelog
+* Thu Nov 19 2026 Julian Brown <julian.brown@webpros.com> - 8.6.0-2
+- EA4-398: Update to PHP 8.6.0 (GA)
+
 * Tue Nov 10 2026 Julian Brown <julian.brown@webpros.com> - 8.6.0-1
 - EA4-398: First build (8.6.0RC5)
 - EA4-398: Carry over EA4-361 (argon/openssl deps in -common), EA4-326 (link
