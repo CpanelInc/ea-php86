@@ -117,7 +117,7 @@ Vendor:   cPanel, Inc.
 Name:     %{?scl_prefix}php
 Version:  8.6.0
 # Doing release_prefix this way for Release allows for OBS-proof versioning, See EA-4588 for more details
-%define release_prefix 2
+%define release_prefix 3
 Release:  %{release_prefix}%{?dist}.cpanel
 # All files licensed under PHP version 3.01, except
 # Zend is licensed under Zend
@@ -165,6 +165,7 @@ Patch404: 0012-Prevent-kill_all_lockers-from-crashing-PHP.patch
 # FreeType < 2.10 (EL8). Likely to be removed: once a PHP 8.6.x release contains
 # HAVE_FT2BUILD_H in ext/gd/config.m4, drop this patch and its %%patch405 line.
 Patch405: 0013-Define-HAVE_FT2BUILD_H-for-bundled-libgd.patch
+Patch406: 0014-FPM-EA4-421-ignore-request-admin-security-directives.patch
 
 %if 0%{?rhel} == 7
 BuildRequires: devtoolset-8 devtoolset-8-gcc devtoolset-8-gcc-c++ kernel-devel
@@ -893,6 +894,7 @@ inside them.
 %patch404 -p1 -b .kill_all_lockers
 # TEMPORARY: see the Patch405 comment above; remove once upstream ships the fix
 %patch405 -p1 -b .ft2build
+%patch406 -p1 -b .fcgiadminvalue
 
 # Prevent %%doc confusion over LICENSE files
 cp TSRM/LICENSE TSRM_LICENSE
@@ -1612,6 +1614,9 @@ fi
 %files zip -f files.zip
 
 %changelog
+* Mon Nov 23 2026 Dan Muey <daniel.muey@webpros.com> - 8.6.0-3
+- EA4-421: Ignore request-supplied PHP_ADMIN_VALUE for security-sensitive directives
+
 * Thu Nov 19 2026 Julian Brown <julian.brown@webpros.com> - 8.6.0-2
 - EA4-398: Update to PHP 8.6.0 (GA)
 
